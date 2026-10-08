@@ -1,0 +1,686 @@
+{
+  "name": "QuoteFlow 05 - Scheduled Follow-Ups",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c92aa82b-e48e-43da-a061-81e1afb27734",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_QUOTE_REQUESTS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Quote Requests",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_QUOTE_REQUESTS_TABLE_ID"
+        },
+        "filterByFormula": "=",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "692e567a-9f9f-4c84-882b-cc4a235d2a31",
+      "name": "Find Due Follow-Ups"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Contacts",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_CONTACTS_TABLE_ID"
+        },
+        "filterByFormula": "={{ \"{Contact ID} = '\" + $json.fields[\"Contact ID\"] + \"'\" }}",
+        "returnAll": false,
+        "limit": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "2d01a8ad-b185-414e-bd77-0d01608c54c1",
+      "name": "Find Follow-Up Contact"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "09a881ab-ebb4-4d1d-83f7-890ca6e1deca",
+              "leftValue": "={{ $json.fields[\"Consent Status\"] }}",
+              "rightValue": "Service messages allowed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "a3bbf364-79b0-4939-8241-7eabc84e13a6",
+              "leftValue": "={{ $json.fields[\"Last Inbound At\"] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        832,
+        0
+      ],
+      "id": "d568f3c0-411e-49e6-a03a-fc371f6e6d23",
+      "name": "Can Send Follow-Up?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.fields[\"Email\"] }}",
+        "subject": "={{ \"Following up on \" + $(\"Filter Due Follow-Ups\").item.json.fields[\"Request ID\"] }}",
+        "emailType": "text",
+        "message": "={{ `Hi ${$json.fields[\"Full Name\"].split(\" \")[0]},\n\nI’m following up on your ${$(\"Filter Due Follow-Ups\").item.json.fields[\"Service Type\"]} request (${$(\"Filter Due Follow-Ups\").item.json.fields[\"Request ID\"]}).\n\nWould you like to proceed, ask a question, or pause this request for now?\n\nRegards,\nBrightNest Cleaning` }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -96
+      ],
+      "id": "d5905642-fd3c-4d66-90eb-de17c1f5664a",
+      "name": "Send Follow-Up Email",
+      "webhookId": "e86b0f93-1f57-46aa-8652-dd9f68968296"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const quote = $(\"Filter Due Follow-Ups\").item.json;\n\nconst previousCount = Number(\n  quote.fields[\"Follow-up Count\"] || 0\n);\n\nconst followUpCount = previousCount + 1;\n\n// Follow-up cadence: 3 days, 7 days, then 14 days.\nconst delayDays = {\n  1: 3,\n  2: 7,\n  3: 14,\n}[followUpCount];\n\nreturn {\n  json: {\n    quoteRecordId: quote.id,\n    requestId: quote.fields[\"Request ID\"],\n    followUpCount,\n    nextActionAt: delayDays\n      ? new Date(Date.now() + delayDays * 86400000).toISOString()\n      : null,\n    stopFollowUps: followUpCount >= 4,\n    gmailMessageId: $json.id || \"\",\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -96
+      ],
+      "id": "4ca0fe59-5d2f-4132-bf29-535c2c6ae554",
+      "name": "Prepare Follow-Up State"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_QUOTE_REQUESTS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Quote Requests",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_QUOTE_REQUESTS_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.quoteRecordId }}",
+            "Pipeline Stage": "Following Up",
+            "Follow-up Count": "={{ $json.followUpCount }}",
+            "Next Action At": "={{ $json.nextActionAt }}",
+            "Stop Follow-ups": "={{ $json.stopFollowUps }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Service Type",
+              "displayName": "Service Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Property Type",
+              "displayName": "Property Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Service Address",
+              "displayName": "Service Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Service Area",
+              "displayName": "Service Area",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Property Size",
+              "displayName": "Property Size",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Cleaning Frequency",
+              "displayName": "Cleaning Frequency",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Preferred Date",
+              "displayName": "Preferred Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Special Requirements",
+              "displayName": "Special Requirements",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lead Score",
+              "displayName": "Lead Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Score Explanation",
+              "displayName": "Score Explanation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Pipeline Stage",
+              "displayName": "Pipeline Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Next Action At",
+              "displayName": "Next Action At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Count",
+              "displayName": "Follow-up Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Stop Follow-ups",
+              "displayName": "Stop Follow-ups",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1456,
+        -96
+      ],
+      "id": "4abd0b13-83d3-4124-9fa3-bf37b8ff8056",
+      "name": "Update Follow-Up State"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_COMMUNICATIONS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Communications",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_COMMUNICATIONS_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Communication ID": "={{ \"COM-\" + $(\"Prepare Follow-Up State\").item.json.requestId.replace(/^QF-/, \"\") + \"-FU-\" + $(\"Prepare Follow-Up State\").item.json.followUpCount }}",
+            "Request ID": "={{ $(\"Prepare Follow-Up State\").item.json.requestId }}",
+            "Channel": "Email",
+            "Direction": "Outbound",
+            "Message Type": "Follow-up",
+            "Message Summary": "={{ \"Automated follow-up #\" + $(\"Prepare Follow-Up State\").item.json.followUpCount + \" sent\" }}",
+            "Delivery Status": "Sent",
+            "Sent Or Received At": "={{ $now.toISO() }}",
+            "External Message ID": "={{ $(\"Prepare Follow-Up State\").item.json.gmailMessageId }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Communication ID",
+              "displayName": "Communication ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Channel",
+              "displayName": "Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Direction",
+              "displayName": "Direction",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Message Type",
+              "displayName": "Message Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Message Summary",
+              "displayName": "Message Summary",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "External Message ID",
+              "displayName": "External Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Delivery Status",
+              "displayName": "Delivery Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Sent Or Received At",
+              "displayName": "Sent Or Received At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1664,
+        -96
+      ],
+      "id": "7654a847-facd-4d55-899e-56206fa05799",
+      "name": "Log Follow-Up Communication"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = Date.now();\n\nreturn $input.all().filter((item) => {\n  const fields = item.json.fields || {};\n\n  const stage = String(fields[\"Pipeline Stage\"] || \"\").trim();\n  const count = Number(fields[\"Follow-up Count\"] || 0);\n\n  const stopValue = fields[\"Stop Follow-ups\"];\n  const stopped =\n    stopValue === true ||\n    String(stopValue || \"\").toLowerCase() === \"true\";\n\n  const nextActionAt = Date.parse(fields[\"Next Action At\"] || \"\");\n\n  return (\n    [\"Quote Sent\", \"Following Up\"].includes(stage) &&\n    count < 4 &&\n    !stopped &&\n    Number.isFinite(nextActionAt) &&\n    nextActionAt <= now\n  );\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "a9cbab7e-645b-4744-85f5-e51df5c6d748",
+      "name": "Filter Due Follow-Ups"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Find Due Follow-Ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Due Follow-Ups": {
+      "main": [
+        [
+          {
+            "node": "Filter Due Follow-Ups",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Follow-Up Contact": {
+      "main": [
+        [
+          {
+            "node": "Can Send Follow-Up?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Can Send Follow-Up?": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-Up Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-Up Email": {
+      "main": [
+        [
+          {
+            "node": "Prepare Follow-Up State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Follow-Up State": {
+      "main": [
+        [
+          {
+            "node": "Update Follow-Up State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Follow-Up State": {
+      "main": [
+        [
+          {
+            "node": "Log Follow-Up Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Due Follow-Ups": {
+      "main": [
+        [
+          {
+            "node": "Find Follow-Up Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "BwZgHa07xiGrF4mq",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "versionCounter": 80,
+  "triggerCount": 1,
+  "versionMetadata": {
+    "name": "Version 309c36e5",
+    "description": ""
+  }
+}

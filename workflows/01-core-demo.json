@@ -1,0 +1,185 @@
+{
+  "name": "QuoteFlow 01 - Core Demo",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5d642110-b7d8-4569-b7e2-07519e2b1c11",
+      "name": "Run Demo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { fullName: 'Sarah Morgan', email: 'sarah@example.com', whatsappNumber: '+15550102030', serviceType: 'Deep cleaning', propertyType: 'House', serviceAddress: '18 Example Street', serviceArea: '', propertySize: '3 bedrooms', cleaningFrequency: 'One-time', preferredDate: '', specialRequirements: 'Oven cleaning requested', estimatedValue: 450, consent: true, customerEngaged: false, source: 'Website form' } }];"
+      },
+      "id": "d5d88b99-36ce-48c1-b92a-cab57afcf21a",
+      "name": "Demo Quote Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nconst clean = (value) => String(value ?? '').trim();\nconst digits = (value) => clean(value).replace(/[^0-9+]/g, '');\nconst email = clean(input.email).toLowerCase();\nconst phone = digits(input.whatsappNumber || input.phone);\nconst requestSeed = `${Date.now()}-${phone.replace(/\\D/g, '').slice(-6) || 'demo'}`;\nreturn [{ json: { requestId: `QF-${requestSeed}`, contact: { fullName: clean(input.fullName || input.name), email, whatsappNumber: phone, preferredChannel: 'Both', consent: input.consent === true || clean(input.consent).toLowerCase() === 'true' }, job: { serviceType: clean(input.serviceType), propertyType: clean(input.propertyType), serviceAddress: clean(input.serviceAddress), serviceArea: clean(input.serviceArea), propertySize: clean(input.propertySize), cleaningFrequency: clean(input.cleaningFrequency), preferredDate: clean(input.preferredDate), specialRequirements: clean(input.specialRequirements), estimatedValue: Number(input.estimatedValue || 0) }, context: { source: clean(input.source || 'Website form'), customerEngaged: input.customerEngaged === true, receivedAt: new Date().toISOString() } } }];"
+      },
+      "id": "9473044c-3dcf-43ba-b269-60ee45c64dd4",
+      "name": "Normalize Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -440,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst required = [\n  ['full name', data.contact.fullName],\n  ['email address', data.contact.email],\n  ['WhatsApp number', data.contact.whatsappNumber],\n  ['service type', data.job.serviceType],\n  ['property type', data.job.propertyType],\n  ['service address', data.job.serviceAddress],\n  ['service area or postcode', data.job.serviceArea],\n  ['property size', data.job.propertySize],\n  ['cleaning frequency', data.job.cleaningFrequency],\n  ['preferred date', data.job.preferredDate]\n];\nconst missingFields = required.filter(([, value]) => !String(value ?? '').trim()).map(([label]) => label);\nconst invalidFields = [];\nif (data.contact.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(data.contact.email)) invalidFields.push('email address');\nif (data.contact.whatsappNumber && data.contact.whatsappNumber.replace(/\\D/g, '').length < 8) invalidFields.push('WhatsApp number');\nreturn [{ json: { ...data, validation: { isComplete: missingFields.length === 0 && invalidFields.length === 0, missingFields, invalidFields } } }];"
+      },
+      "id": "6287ac0a-187b-4b9b-8db4-c01373ce3bfb",
+      "name": "Validate Required Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -180,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst reasons = [];\nlet score = 0;\nif (data.job.serviceArea) { score += 20; reasons.push('service area supplied'); }\nif (data.validation.isComplete) { score += 15; reasons.push('complete request'); }\nif (/weekly|fortnight|monthly|recurr/i.test(data.job.cleaningFrequency)) { score += 20; reasons.push('recurring service'); }\nif (data.job.estimatedValue >= 500) { score += 20; reasons.push('strong estimated value'); }\nelse if (data.job.estimatedValue >= 250) { score += 10; reasons.push('moderate estimated value'); }\nif (data.job.preferredDate) { score += 15; reasons.push('workable date supplied'); }\nif (data.context.customerEngaged) { score += 10; reasons.push('customer engaged'); }\nconst stage = data.validation.isComplete ? (score >= 40 ? 'Qualified' : 'Manual Review') : 'Awaiting Information';\nconst priority = score >= 70 ? 'Hot' : score >= 40 ? 'Warm' : 'Review';\nconst nextAction = new Date(Date.now() + (data.validation.isComplete ? 24 : 6) * 60 * 60 * 1000).toISOString();\nreturn [{ json: { ...data, qualification: { score, priority, reasons, stage }, controls: { followUpCount: 0, stopFollowUps: false, nextActionAt: nextAction } } }];"
+      },
+      "id": "31a2395c-09fe-4f20-af43-635c83b862a4",
+      "name": "Score and Route Lead",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst firstName = data.contact.fullName.split(/\\s+/)[0] || 'there';\nconst acknowledgement = `Hi ${firstName}, thanks for requesting a quote from BrightNest Cleaning. We received your ${data.job.serviceType || 'cleaning'} request. Your reference is ${data.requestId}.`;\nconst missing = [...data.validation.missingFields, ...data.validation.invalidFields];\nconst missingRequest = missing.length ? `Hi ${firstName}, we are preparing your cleaning quote and need: ${missing.join(', ')}. Reply with those details and we will continue your request.` : '';\nconst nextMessage = missingRequest || `Hi ${firstName}, your request is ready for review. We will send available inspection times shortly.`;\nreturn [{ json: { ...data, communications: { email: { to: data.contact.email, subject: `Cleaning quote request received - ${data.requestId}`, body: `${acknowledgement}\\n\\n${nextMessage}` }, whatsapp: { to: data.contact.whatsappNumber, templateKey: missing.length ? 'quote_missing_information' : 'quote_acknowledgement', body: `${acknowledgement} ${nextMessage}` } } } }];"
+      },
+      "id": "81b628b2-c98e-4637-921b-a58485328891",
+      "name": "Prepare Email and WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nreturn [{ json: { success: true, demoMode: true, message: data.validation.isComplete ? 'Lead is complete and ready for the next action.' : 'Lead was saved and missing information was requested.', crmRecord: { requestId: data.requestId, customer: data.contact.fullName, email: data.contact.email, whatsappNumber: data.contact.whatsappNumber, serviceType: data.job.serviceType, pipelineStage: data.qualification.stage, leadScore: data.qualification.score, priority: data.qualification.priority, scoreExplanation: data.qualification.reasons.join('; '), missingFields: data.validation.missingFields, nextActionAt: data.controls.nextActionAt, stopFollowUps: false }, outboundPreview: data.communications } }];"
+      },
+      "id": "b77ef45c-6cae-4b9a-849a-d12ef95d56f2",
+      "name": "Demo CRM Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## QuoteFlow core demonstration\nRuns entirely without credentials. It normalizes a fictional cleaning quote request, validates required details, scores the lead, selects a pipeline stage, and prepares email and WhatsApp messages.\n\nReplace the first Code node with the Webhook/Form Trigger in production, then connect Airtable, Gmail, and WhatsApp nodes after the preparation step.",
+        "height": 340,
+        "width": 700,
+        "color": 5
+      },
+      "id": "f479ea29-22bd-4852-a037-78c88ec2f5e6",
+      "name": "How to use this demo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -320
+      ]
+    }
+  ],
+  "connections": {
+    "Run Demo": {
+      "main": [
+        [
+          {
+            "node": "Demo Quote Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Demo Quote Request": {
+      "main": [
+        [
+          {
+            "node": "Normalize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Required Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Required Details": {
+      "main": [
+        [
+          {
+            "node": "Score and Route Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score and Route Lead": {
+      "main": [
+        [
+          {
+            "node": "Prepare Email and WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email and WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Demo CRM Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}

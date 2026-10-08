@@ -1,0 +1,831 @@
+{
+  "name": "QuoteFlow 02 - Live Webhook Demo",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "quoteflow-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "fb7ca851-43b2-478b-ab8a-4b2e3ce34f20",
+      "name": "Quote Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        112
+      ],
+      "webhookId": "5722192a-01f2-4453-b299-1f4392f66e5a"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json.body ?? $json;\nconst clean = (value) => String(value ?? '').trim();\nconst phone = clean(input.whatsappNumber || input.phone).replace(/[^0-9+]/g, '');\nconst email = clean(input.email).toLowerCase();\nconst consent = ['true', 'yes', 'on', '1'].includes(clean(input.consent).toLowerCase()) || input.consent === true;\nconst requestId = `QF-${new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}-${phone.replace(/\\D/g, '').slice(-4) || 'DEMO'}`;\nconst lead = { requestId, contact: { fullName: clean(input.fullName || input.name), email, whatsappNumber: phone, preferredChannel: 'Both', consent }, job: { serviceType: clean(input.serviceType), propertyType: clean(input.propertyType), serviceAddress: clean(input.serviceAddress), serviceArea: clean(input.serviceArea), propertySize: clean(input.propertySize), cleaningFrequency: clean(input.cleaningFrequency), preferredDate: clean(input.preferredDate), specialRequirements: clean(input.specialRequirements), estimatedValue: Number(input.estimatedValue || 0) }, source: clean(input.source || 'Demo form'), receivedAt: new Date().toISOString() };\nconst required = [['full name', lead.contact.fullName], ['email address', lead.contact.email], ['WhatsApp number', lead.contact.whatsappNumber], ['service type', lead.job.serviceType], ['property type', lead.job.propertyType], ['service address', lead.job.serviceAddress], ['service area or postcode', lead.job.serviceArea], ['property size', lead.job.propertySize], ['cleaning frequency', lead.job.cleaningFrequency], ['preferred date', lead.job.preferredDate]];\nconst missingFields = required.filter(([, value]) => !String(value ?? '').trim()).map(([label]) => label);\nconst invalidFields = [];\nif (lead.contact.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(lead.contact.email)) invalidFields.push('email address');\nif (lead.contact.whatsappNumber && lead.contact.whatsappNumber.replace(/\\D/g, '').length < 8) invalidFields.push('WhatsApp number');\nif (!lead.contact.consent) invalidFields.push('communication consent');\nconst isComplete = missingFields.length === 0 && invalidFields.length === 0;\nlet score = 0;\nconst reasons = [];\nif (lead.job.serviceArea) { score += 20; reasons.push('service area supplied'); }\nif (isComplete) { score += 15; reasons.push('complete request'); }\nif (/weekly|fortnight|monthly|recurr/i.test(lead.job.cleaningFrequency)) { score += 20; reasons.push('recurring service'); }\nif (lead.job.estimatedValue >= 500) { score += 20; reasons.push('strong estimated value'); }\nelse if (lead.job.estimatedValue >= 250) { score += 10; reasons.push('moderate estimated value'); }\nif (lead.job.preferredDate) { score += 15; reasons.push('preferred date supplied'); }\nconst stage = isComplete ? (score >= 40 ? 'Qualified' : 'Manual Review') : 'Awaiting Information';\nconst priority = score >= 70 ? 'Hot' : score >= 40 ? 'Warm' : 'Review';\nconst firstName = lead.contact.fullName.split(/\\s+/)[0] || 'there';\nconst outstanding = [...missingFields, ...invalidFields];\nconst acknowledgement = `Hi ${firstName}, thanks for requesting a quote from BrightNest Cleaning. We received your ${lead.job.serviceType || 'cleaning'} request. Your reference is ${requestId}.`;\nconst nextMessage = outstanding.length ? `We still need: ${outstanding.join(', ')}. Reply with those details and we will continue your request.` : 'Your request is complete. We will send available inspection times shortly.';\nreturn [{ json: { success: true, demoMode: true, message: isComplete ? 'Quote request captured and qualified.' : 'Quote request captured; missing information has been identified.', crmRecord: { ...lead, validation: { isComplete, missingFields, invalidFields }, qualification: { score, priority, reasons, stage }, controls: { followUpCount: 0, stopFollowUps: false, nextActionAt: new Date(Date.now() + (isComplete ? 24 : 6) * 3600000).toISOString() } }, outboundPreview: { email: { to: lead.contact.email, subject: `Cleaning quote request received - ${requestId}`, body: `${acknowledgement}\\n\\n${nextMessage}` }, whatsapp: { to: lead.contact.whatsappNumber, templateKey: outstanding.length ? 'quote_missing_information' : 'quote_acknowledgement', body: `${acknowledgement} ${nextMessage}` } } } }];"
+      },
+      "id": "698e3ec6-96cc-4a30-8460-d6191e832d3f",
+      "name": "Process Quote Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "82524756-6212-4fc2-8853-8e8421937d23",
+      "name": "Return Demo Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        64,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Live quote intake endpoint\nPublish the workflow and submit the included HTML form to:\n`https://YOUR_SUBDOMAIN.app.n8n.cloud/webhook/quoteflow-intake`\n\nThis workflow returns the CRM record, score, pipeline stage, missing fields, and previews of both customer messages.",
+        "height": 300,
+        "width": 620,
+        "color": 5
+      },
+      "id": "ec034aae-f467-481a-8d45-e40cda598a62",
+      "name": "Live Demo Instructions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2608,
+        -560
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_QUOTE_REQUESTS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Quote Requests",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_QUOTE_REQUESTS_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Request ID": "={{ $json.requestId }}",
+            "Contact ID": "={{ 'C-' + $json.requestId.replace('QF-', '') }}",
+            "Service Type": "={{ $json.job.serviceType }}",
+            "Property Type": "={{ $json.job.propertyType }}",
+            "Service Address": "={{ $json.job.serviceAddress }}",
+            "Service Area": "={{ $json.job.serviceArea }}",
+            "Property Size": "={{ $json.job.propertySize }}",
+            "Cleaning Frequency": "={{ $json.job.cleaningFrequency }}",
+            "Preferred Date": "={{ $json.job.preferredDate }}",
+            "Special Requirements": "={{ $json.job.specialRequirements }}",
+            "Lead Score": "={{ $json.qualification.score }}",
+            "Score Explanation": "={{ $json.qualification.reasons.join('; ') }}",
+            "Pipeline Stage": "={{ $json.qualification.stage }}",
+            "Assigned To": "Demo Staff",
+            "Next Action At": "={{ $json.controls.nextActionAt }}",
+            "Follow-up Count": "={{ $json.controls.followUpCount }}",
+            "Stop Follow-ups": "={{ $json.controls.stopFollowUps }}",
+            "Created At": "={{ $json.context.receivedAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Service Type",
+              "displayName": "Service Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Property Type",
+              "displayName": "Property Type",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Service Address",
+              "displayName": "Service Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Service Area",
+              "displayName": "Service Area",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Property Size",
+              "displayName": "Property Size",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Cleaning Frequency",
+              "displayName": "Cleaning Frequency",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Preferred Date",
+              "displayName": "Preferred Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Special Requirements",
+              "displayName": "Special Requirements",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Lead Score",
+              "displayName": "Lead Score",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Score Explanation",
+              "displayName": "Score Explanation",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Pipeline Stage",
+              "displayName": "Pipeline Stage",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned To",
+              "displayName": "Assigned To",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Next Action At",
+              "displayName": "Next Action At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Count",
+              "displayName": "Follow-up Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Stop Follow-ups",
+              "displayName": "Stop Follow-ups",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        288
+      ],
+      "id": "50cd0baf-9bb6-44de-a3da-3a39739d8b89",
+      "name": "Create Quote Request in Airtable"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json.crmRecord;\n\nreturn [{\n  json: {\n    requestId: data.requestId,\n    job: data.job,\n    qualification: data.qualification,\n    controls: data.controls,\n    context: {\n      receivedAt: data.receivedAt\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        288
+      ],
+      "id": "f4ff59db-f568-49a5-90d9-5859d50ed8fc",
+      "name": "Prepare Airtable Payload"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.outboundPreview.email.to }}",
+        "subject": "={{ $json.outboundPreview.email.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.outboundPreview.email.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        272
+      ],
+      "id": "7d59ccd8-a322-4efe-9165-49a9e870ebc2",
+      "name": "Send Customer Acknowledgement Email.",
+      "webhookId": "301e7b52-0271-46f0-a24d-4048c7283fe3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6067fc44-f63d-43a3-8252-193af59db570",
+              "leftValue": "={{ $json.crmRecord.qualification.stage === 'Qualified' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -240,
+        624
+      ],
+      "id": "8763e268-75fc-424f-b5fb-3ce47d929a57",
+      "name": "Qualified Date Available?"
+    },
+    {
+      "parameters": {
+        "calendar": {
+          "__rl": true,
+          "value": "your-email@example.com",
+          "mode": "id"
+        },
+        "start": "={{ $json.crmRecord.job.preferredDate }}",
+        "end": "={{ DateTime.fromISO($json.crmRecord.job.preferredDate).plus({ days: 1 }).toISODate() }}",
+        "additionalFields": {
+          "allday": "yes",
+          "description": "={{ `TENTATIVE — staff approval required\n\nRequest: ${$json.crmRecord.requestId}\nCustomer: ${$json.crmRecord.contact.fullName}\nPhone: ${$json.crmRecord.contact.whatsappNumber}\nEmail: ${$json.crmRecord.contact.email}\nService: ${$json.crmRecord.job.serviceType}\nProperty: ${$json.crmRecord.job.propertyType}\nProperty size: ${$json.crmRecord.job.propertySize}\nFrequency: ${$json.crmRecord.job.cleaningFrequency}\nEstimated value: ${$json.crmRecord.job.estimatedValue}\nLead score: ${$json.crmRecord.qualification.score}` }}",
+          "location": "={{ $json.crmRecord.job.serviceAddress }}",
+          "showMeAs": "opaque",
+          "summary": "={{ `Tentative inspection — ${$json.crmRecord.contact.fullName} — ${$json.crmRecord.requestId}` }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        272,
+        496
+      ],
+      "id": "974e9d99-4a0e-4581-95de-dfd2b6c21694",
+      "name": "Create Tentative Calendar Hold"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_INSPECTIONS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Inspections",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_INSPECTIONS_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Inspection ID": "={{ 'I-' + $('Process Quote Request').item.json.crmRecord.requestId.replace(/^QF-/, '') }}",
+            "Request ID": "={{ $('Process Quote Request').item.json.crmRecord.requestId }}",
+            "Slot 1": "={{ $('Process Quote Request').item.json.crmRecord.job.preferredDate }}",
+            "Approval Status": "Pending",
+            "Assigned Staff": "Demo Inspector",
+            "Calendar Event ID": "={{ $json.id }}",
+            "Created At": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Inspection ID",
+              "displayName": "Inspection ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Slot 1",
+              "displayName": "Slot 1",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Slot 2",
+              "displayName": "Slot 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Slot 3",
+              "displayName": "Slot 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Selected Slot",
+              "displayName": "Selected Slot",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approval Status",
+              "displayName": "Approval Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Assigned Staff",
+              "displayName": "Assigned Staff",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Calendar Event ID",
+              "displayName": "Calendar Event ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        496
+      ],
+      "id": "123c9a17-a113-4f88-bf6a-a3de2cf9adde",
+      "name": "Create Inspection Record"
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_CONTACTS_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Contacts",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_CONTACTS_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Contact ID": "={{ \"C-\" + $json.crmRecord.requestId.replace(/^QF-/, \"\") }}",
+            "Full Name": "={{ $json.crmRecord.contact.fullName }}",
+            "Email": "={{ $json.crmRecord.contact.email }}",
+            "WhatsApp Number": "={{ $json.crmRecord.contact.whatsappNumber }}",
+            "Preferred Channel": "={{ $json.crmRecord.contact.preferredChannel }}",
+            "Consent Status": "={{ $json.crmRecord.contact.consent ? \"Service messages allowed\" : \"No consent\" }}",
+            "Created At": "={{ $json.crmRecord.receivedAt }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Contact ID",
+              "displayName": "Contact ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "WhatsApp Number",
+              "displayName": "WhatsApp Number",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Preferred Channel",
+              "displayName": "Preferred Channel",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Consent Status",
+              "displayName": "Consent Status",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Last Inbound At",
+              "displayName": "Last Inbound At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -80,
+        -80
+      ],
+      "id": "afcde2a9-d154-4da5-b3f7-1e50aa3bb949",
+      "name": "Create or Update Contact"
+    }
+  ],
+  "connections": {
+    "Quote Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Quote Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Quote Request": {
+      "main": [
+        [
+          {
+            "node": "Prepare Airtable Payload",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return Demo Result",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Customer Acknowledgement Email.",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Qualified Date Available?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create or Update Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Demo Result": {
+      "main": [
+        []
+      ]
+    },
+    "Prepare Airtable Payload": {
+      "main": [
+        [
+          {
+            "node": "Create Quote Request in Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Acknowledgement Email.": {
+      "main": [
+        []
+      ]
+    },
+    "Qualified Date Available?": {
+      "main": [
+        [
+          {
+            "node": "Create Tentative Calendar Hold",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Tentative Calendar Hold": {
+      "main": [
+        [
+          {
+            "node": "Create Inspection Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "BwZgHa07xiGrF4mq",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "versionCounter": 111,
+  "triggerCount": 1,
+  "versionMetadata": {
+    "name": "Version c8a9ce44",
+    "description": ""
+  }
+}

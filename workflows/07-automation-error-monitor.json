@@ -1,0 +1,232 @@
+{
+  "name": "QuoteFlow 07 – Automation Error Monitor",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1316d4c5-51ea-49e5-9422-5b0702310c37",
+      "name": "QuoteFlow Workflow Error."
+    },
+    {
+      "parameters": {
+        "jsCode": "const execution = $json.execution || {};\nconst workflow = $json.workflow || {};\nconst trigger = $json.trigger || {};\nconst error = execution.error || trigger.error || {};\n\nconst errorMessage =\n  error.message ||\n  execution.message ||\n  trigger.message ||\n  \"Unknown workflow error\";\n\nconst failedNode =\n  execution.lastNodeExecuted ||\n  trigger.lastNodeExecuted ||\n  \"Unknown node\";\n\nreturn {\n  json: {\n    workflowName: workflow.name || \"Unknown workflow\",\n    workflowId: workflow.id || \"\",\n    executionId: execution.id || \"\",\n    executionUrl: execution.url || \"\",\n    executionMode: execution.mode || \"\",\n    failedNode,\n    errorMessage,\n    errorStack: error.stack || \"\",\n    occurredAt: new Date().toISOString(),\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "7e5170ba-a5b0-4fc0-ae37-a755762d4aa6",
+      "name": "Prepare Error Details"
+    },
+    {
+      "parameters": {
+        "sendTo": "alerts@example.com",
+        "subject": "{{ \"QuoteFlow automation error — \" + $(\"Prepare Error Details\").item.json.workflowName }}",
+        "message": "{{ \"<h2>QuoteFlow automation error</h2>\" + \"<p><strong>Workflow:</strong> \" + $(\"Prepare Error Details\").item.json.workflowName + \"</p>\" + \"<p><strong>Failed node:</strong> \" + $(\"Prepare Error Details\").item.json.failedNode + \"</p>\" + \"<p><strong>Error:</strong> \" + $(\"Prepare Error Details\").item.json.errorMessage + \"</p>\" + \"<p><strong>Execution ID:</strong> \" + ($(\"Prepare Error Details\").item.json.executionId || \"Unavailable\") + \"</p>\" + \"<p><strong>Time:</strong> \" + $(\"Prepare Error Details\").item.json.occurredAt + \"</p>\" + ($(\"Prepare Error Details\").item.json.executionUrl ? \"<p><a href=\\\"\" + $(\"Prepare Error Details\").item.json.executionUrl + \"\\\">Open failed execution</a></p>\" : \"\") }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        0
+      ],
+      "id": "f7bb3558-82c9-4de7-aea0-67a2f788b698",
+      "name": "Send Error Alert",
+      "webhookId": "5a2673cc-a1b2-4c6d-a48f-6fc9802bd6b2"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "YOUR_AIRTABLE_BASE_ID",
+          "mode": "list",
+          "cachedResultName": "QuoteFlow Demo CRM",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID"
+        },
+        "table": {
+          "__rl": true,
+          "value": "YOUR_AUTOMATION_LOG_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "Automation Log",
+          "cachedResultUrl": "https://airtable.com/YOUR_AIRTABLE_BASE_ID/YOUR_AUTOMATION_LOG_TABLE_ID"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Log ID": "={{ \"ERR-\" + ($json.executionId || $json.occurredAt.replace(/[^0-9]/g, \"\")) }}",
+            "Workflow": "={{ $json.workflowName }}",
+            "Execution ID": "={{ $json.executionId || \"Unavailable\" }}",
+            "Error Details": "={{   \"Node: \" + $json.failedNode +   \" | Error: \" + $json.errorMessage +   ($json.executionUrl ? \" | Execution: \" + $json.executionUrl : \"\") }}",
+            "Result": "Failed",
+            "Retry Count": 0,
+            "Created At": "={{ $json.occurredAt }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Log ID",
+              "displayName": "Log ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Request ID",
+              "displayName": "Request ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Execution ID",
+              "displayName": "Execution ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Retry Count",
+              "displayName": "Retry Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Error Details",
+              "displayName": "Error Details",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Created At",
+              "displayName": "Created At",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "10662cf1-6116-438e-a04a-f9aae473559d",
+      "name": "Log Workflow Error"
+    }
+  ],
+  "connections": {
+    "QuoteFlow Workflow Error.": {
+      "main": [
+        [
+          {
+            "node": "Prepare Error Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Error Details": {
+      "main": [
+        [
+          {
+            "node": "Log Workflow Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Workflow Error": {
+      "main": [
+        [
+          {
+            "node": "Send Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "versionCounter": 32,
+  "triggerCount": 0,
+  "versionMetadata": {
+    "name": "Version eb75d48c",
+    "description": ""
+  }
+}

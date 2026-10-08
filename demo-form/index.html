@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QuoteFlow Demo | BrightNest Cleaning</title>
+  <style>
+    :root { color-scheme: light; --ink:#102a2b; --muted:#587172; --green:#0b7a69; --mint:#e7f7f2; --line:#cfe1de; --paper:#fff; --bg:#f4f8f7; --warn:#a15c00; }
+    * { box-sizing:border-box; }
+    body { margin:0; font:16px/1.5 Inter,Segoe UI,Arial,sans-serif; color:var(--ink); background:linear-gradient(135deg,#eff9f6,#f9fbfb 55%,#edf5f4); }
+    main { width:min(1120px,calc(100% - 32px)); margin:38px auto 70px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:end; margin-bottom:24px; }
+    .eyebrow { color:var(--green); text-transform:uppercase; letter-spacing:.14em; font-weight:800; font-size:.75rem; }
+    h1 { margin:.2rem 0 .45rem; font-size:clamp(2rem,5vw,4.4rem); line-height:.98; letter-spacing:-.045em; }
+    h2,h3 { margin-top:0; }
+    p { color:var(--muted); }
+    .badge { background:var(--mint); color:var(--green); padding:8px 12px; border:1px solid var(--line); border-radius:999px; font-weight:700; white-space:nowrap; }
+    .grid { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(300px,.75fr); gap:22px; align-items:start; }
+    .card { background:rgba(255,255,255,.94); border:1px solid var(--line); border-radius:20px; padding:24px; box-shadow:0 18px 50px rgba(25,70,65,.08); }
+    form { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    label { display:grid; gap:6px; font-weight:700; font-size:.9rem; }
+    label.full,.actions { grid-column:1/-1; }
+    input,select,textarea { width:100%; padding:12px 13px; border:1px solid #b9cfcb; border-radius:10px; background:#fff; color:var(--ink); font:inherit; }
+    textarea { min-height:86px; resize:vertical; }
+    input:focus,select:focus,textarea:focus { outline:3px solid rgba(11,122,105,.15); border-color:var(--green); }
+    .check { display:flex; align-items:flex-start; gap:10px; font-weight:500; }
+    .check input { width:auto; margin-top:5px; }
+    button { border:0; border-radius:12px; padding:13px 18px; background:var(--green); color:#fff; font:700 1rem/1 inherit; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .endpoint { margin-top:18px; }
+    .endpoint input { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:.85rem; }
+    .step { display:grid; grid-template-columns:30px 1fr; gap:10px; margin:15px 0; }
+    .step span { width:30px; height:30px; border-radius:50%; display:grid; place-items:center; background:var(--mint); color:var(--green); font-weight:800; }
+    .step strong { display:block; }
+    .step small { color:var(--muted); }
+    #result { margin-top:22px; display:none; }
+    .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:15px 0; }
+    .metric { background:var(--bg); border:1px solid var(--line); border-radius:12px; padding:12px; }
+    .metric small { color:var(--muted); display:block; }
+    .metric strong { font-size:1.1rem; }
+    .message { border-left:4px solid var(--green); background:var(--mint); padding:12px 14px; margin-top:10px; white-space:pre-wrap; }
+    .error { border-color:#efc4bd; background:#fff2ef; color:#782d20; }
+    pre { overflow:auto; max-height:320px; padding:14px; background:#102a2b; color:#d8f5ee; border-radius:12px; font-size:.78rem; }
+    @media (max-width:820px) { .grid { grid-template-columns:1fr; } header { align-items:start; flex-direction:column; } }
+    @media (max-width:560px) { form { grid-template-columns:1fr; } label.full,.actions { grid-column:auto; } .metrics { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <div class="eyebrow">Automation portfolio demo</div>
+        <h1>QuoteFlow</h1>
+        <p>A working quote-intake demonstration for cleaning companies.</p>
+      </div>
+      <div class="badge">Portfolio demo · messages disabled by default</div>
+    </header>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Request a cleaning quote</h2>
+        <p>The postcode and preferred date are intentionally blank so the first run demonstrates missing-information detection.</p>
+        <form id="quoteForm">
+          <label>Full name<input name="fullName" value="Sarah Morgan" required></label>
+          <label>Email<input type="email" name="email" value="sarah@example.com" required></label>
+          <label>WhatsApp number<input name="whatsappNumber" value="+15550102030" required></label>
+          <label>Service type
+            <select name="serviceType"><option>Deep cleaning</option><option>Recurring home cleaning</option><option>Office cleaning</option><option>End-of-tenancy cleaning</option></select>
+          </label>
+          <label>Property type<select name="propertyType"><option>House</option><option>Apartment</option><option>Office</option><option>Retail unit</option></select></label>
+          <label>Property size<input name="propertySize" value="3 bedrooms"></label>
+          <label class="full">Service address<input name="serviceAddress" value="18 Example Street" required></label>
+          <label>Service area or postcode<input name="serviceArea" placeholder="Leave blank for first demo"></label>
+          <label>Preferred date<input type="date" name="preferredDate"></label>
+          <label>Cleaning frequency<select name="cleaningFrequency"><option>One-time</option><option>Weekly</option><option>Fortnightly</option><option>Monthly</option></select></label>
+          <label>Estimated job value<input type="number" name="estimatedValue" value="450" min="0"></label>
+          <label class="full">Special requirements<textarea name="specialRequirements">Oven cleaning requested</textarea></label>
+          <label class="check full"><input type="checkbox" name="consent" checked><span>I agree to receive service-related email and WhatsApp messages about this request.</span></label>
+          <div class="actions"><button id="submitButton" type="submit">Run QuoteFlow</button></div>
+        </form>
+        <label class="endpoint">n8n webhook URL<input id="endpoint" value="http://localhost:5678/webhook/quoteflow-intake"></label>
+
+        <section id="result" class="card" aria-live="polite"></section>
+      </section>
+
+      <aside class="card">
+        <h3>What the prospect sees</h3>
+        <div class="step"><span>1</span><div><strong>Instant capture</strong><small>Every request becomes a structured CRM record.</small></div></div>
+        <div class="step"><span>2</span><div><strong>Missing details found</strong><small>The workflow asks only for what is absent.</small></div></div>
+        <div class="step"><span>3</span><div><strong>Lead prioritized</strong><small>A transparent score helps staff respond in order.</small></div></div>
+        <div class="step"><span>4</span><div><strong>Both channels prepared</strong><small>Email and WhatsApp copy is generated consistently.</small></div></div>
+        <div class="step"><span>5</span><div><strong>Follow-ups controlled</strong><small>Messages stop on reply, booking, win, loss, or pause.</small></div></div>
+        <p><strong>Second run:</strong> enter a postcode and date, change the frequency to Weekly, and submit again. The request will move from “Awaiting Information” to “Qualified.”</p>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const form = document.querySelector('#quoteForm');
+    const result = document.querySelector('#result');
+    const button = document.querySelector('#submitButton');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      button.textContent = 'Running automation…';
+      result.style.display = 'block';
+      result.className = 'card';
+      result.innerHTML = '<p>Sending the request to n8n…</p>';
+      const values = Object.fromEntries(new FormData(form));
+      values.consent = form.elements.consent.checked;
+      values.source = 'QuoteFlow portfolio demo form';
+      try {
+        const response = await fetch(document.querySelector('#endpoint').value.trim(), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(values)
+        });
+        if (!response.ok) throw new Error(`n8n returned HTTP ${response.status}`);
+        const data = await response.json();
+        const record = data.crmRecord;
+        result.innerHTML = `
+          <h3>${data.message}</h3>
+          <div class="metrics">
+            <div class="metric"><small>Pipeline stage</small><strong>${escapeHtml(record.qualification.stage)}</strong></div>
+            <div class="metric"><small>Lead score</small><strong>${record.qualification.score}/100</strong></div>
+            <div class="metric"><small>Priority</small><strong>${escapeHtml(record.qualification.priority)}</strong></div>
+          </div>
+          <p><strong>Missing:</strong> ${record.validation.missingFields.length ? record.validation.missingFields.map(escapeHtml).join(', ') : 'None'}</p>
+          <h3>Email preview</h3><div class="message">${escapeHtml(data.outboundPreview.email.body)}</div>
+          <h3>WhatsApp preview</h3><div class="message">${escapeHtml(data.outboundPreview.whatsapp.body)}</div>
+          <details><summary>Technical response</summary><pre>${escapeHtml(JSON.stringify(data, null, 2))}</pre></details>`;
+      } catch (error) {
+        result.className = 'card error';
+        result.innerHTML = `<h3>The QuoteFlow endpoint is not reachable</h3><p>${escapeHtml(error.message)}</p><p>Start n8n, publish the live webhook workflow, confirm that the URL uses <code>/webhook/</code>, then try again.</p>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Run QuoteFlow';
+      }
+    });
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>'"]/g, (character) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' })[character]);
+    }
+  </script>
+</body>
+</html>

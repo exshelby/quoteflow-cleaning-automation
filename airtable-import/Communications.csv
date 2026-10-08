@@ -1,0 +1,2 @@
+Communication ID,Request ID,Channel,Direction,Message Type,Message Summary,External Message ID,Delivery Status,Sent Or Received At
+M-1001,QF-1001,Email,Outbound,Acknowledgement,Quote request received,,Delivered,2026-09-29T10:01:00Z
